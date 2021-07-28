@@ -1,0 +1,74 @@
+version: "2.1"
+networks:
+  internal_network:
+services:
+  watchtower:
+    restart: unless-stopped
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    #  - /root/.docker/config.json:/config.json
+    command: --label-enable --cleanup --interval 30
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    expose:
+      - "8080"
+    #ports:
+    #  - "8080:8080"
+    network_mode: none
+#docker run -d --name autoheal --restart=always -e AUTOHEAL_CONTAINER_LABEL=all -v /var/run/docker.sock:/var/run/docker.sock land007/docker-autoheal:latest
+  docker-autoheal:
+    restart: always
+    network_mode: none
+    image: land007/docker-autoheal:latest
+    container_name: docker-autoheal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - "AUTOHEAL_CONTAINER_LABEL=all"
+#docker run -it --restart=always -e "username=land007" -e "password=81dc9bdb52d04dc20036dbd8313ed055" -p 8080:8080 --name proxy land007/proxy:latest
+  proxy:
+    restart: always
+    networks:
+      - internal_network
+    image: land007/proxy:latest
+    container_name: proxy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "300k"
+        max-file: "3"
+    environment:
+      - username=land007
+      - password=fcea920f7412b5da7be0cf42b8c93759
+    expose:
+      - "8080"
+    ports:
+      - "28080:8080"
+#docker run -d --name ssh-proxy --restart=always --health-cmd='curl -sSx http://land007:1234567@192.168.181.143:28080 http://www.ce.cn || exit 1' --health-interval=10s --health-timeout=10s --health-retries=5 -v ~/docker/node:/node land007/ssh-proxy:latest
+  ssh-proxy:
+    restart: always
+    networks:
+      - internal_network
+    image: land007/ssh-proxy:latest
+    container_name: ssh-proxy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "300k"
+        max-file: "3"
+    volumes:
+      - ./ssh-proxy:/node
+    environment:
+      - SSHIP=192.168.1.1
+      - SSHPORT=22
+      - USERNAME=land007
+      - PASSWORD=1234567
+      - PROXYIP=172.17.0.1
+      - PROXYPORT=28080
+    healthcheck:
+      test: curl -sSx http://land007:1234567@192.168.1.1:28080 http://www.ce.cn || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 5
